@@ -31,97 +31,151 @@
 # representing official policies, either expressed or implied, of the 
 # Privatebox Networks.
 
-__version__ = '$Id$'
+__version__ = '$Revision$'
 
 
 import ConfigParser
+import MySQLdb
 import re
 import signal
-import sys
 import telnetlib
 import threading
-import time
+from sys import exit
+from time import localtime, strftime
 
 """ global variables """
 chloe = telnetlib.Telnet()
 ANSI_COLOR_REGEXP = re.compile(chr(27) + '\[[0-9;]*[m]')
-bbs = {'host': '', 'login': '', 'pass': '', 'conn': 0}
-menu = {'main': '', 'pause': '', 'go': ''}
-www = {'dir': '', 'log': ''}
-""" verbose output """
-debug = 1
+ANSI_REGEXP = re.compile('( |[A-Z])\x08')
+bbs = {}
+menu = {}
+mysql = {}
+www = {}
+""" debug variables """
+debug = {}
+_debug = 0
 
 def main():
-	""" start telnet/threaded timer """
-	global ANSI_COLOR_REGEXP, bbs, chloe, debug, menu, start, www
+	""" initialize variables and config """
+	global ANSI_REGEXP, ANSI_COLOR_REGEXP, bbs, chloe, debug, menu, start, www, _debug
+	config()
+	if (_debug): plog('intializing...')
 	signal.signal(signal.SIGINT, quit)
+
+	""" start telnet/threaded timer """
 	t = threading.Timer(30.0, report)
 	t.start()
 	start = 1
-	config()
-	telnet()
+	sql = _sql(mysql['host'],mysql['port'],mysql['user'],mysql['passwd'],mysql['db'])
+	_telnet()
 	chloe.write('\r\n')
 	while 1:
 		line = chloe.read_until('\r\n')
 		line = line.strip('\r\n')
 		line = ANSI_COLOR_REGEXP.sub('', line)
-		if (debug): print 'chloe: bbs: ' + line
+		line = ANSI_REGEXP.sub('', line)
+		if (_debug): mlog('%s' % line)
 	return 0
-
-def quit(signum, frame):
-	""" stop telnet/threaded timer and exit """
-	global chloe, debug
-	if (debug): print 'chloe: exiting %d thread(s)' % (threading.active_count())
-	chloe.close()
-	sys.exit(0)
 
 def config():
 	""" populate lists with configuration information """
-	global bbs, debug, menu, www
+	global bbs, debug, menu, www, _debug
 	cfg = ConfigParser.ConfigParser()
 	cfg.read('bbs.cfg')
-	bbs['host'] = cfg.get('MAIN', 'host', 1)
-	bbs['login'] = cfg.get('MAIN','login', 1)
-	bbs['pass'] = cfg.get('MAIN','password', 1)
+	bbs['host'] = cfg.get('BBS', 'host', 1)
+	bbs['user'] = cfg.get('BBS','user', 1)
+	bbs['passwd'] = cfg.get('BBS','passwd', 1)
+	bbs['admin'] = cfg.get('BBS', 'admin', 1)
 	menu['main'] = cfg.get('MENU', 'main', 1)
 	menu['pause'] = cfg.get('MENU', 'pause', 1)
 	menu['mud'] = cfg.get('MENU', 'mud', 1)
 	menu['go'] = cfg.get('MENU', 'go', 1)
+	mysql['host'] = cfg.get('MYSQL', 'host', 1)
+	mysql['port'] = int(cfg.get('MYSQL', 'port', 1))
+	mysql['user'] = cfg.get('MYSQL', 'user', 1)
+	mysql['passwd'] = cfg.get('MYSQL', 'passwd', 1)
+	mysql['db'] = cfg.get('MYSQL', 'db', 1)
+	debug['log'] = int(cfg.get('DEBUG', 'log', 1))
+	debug['logfile'] = cfg.get('DEBUG', 'logfile', 1)
+	if not (_debug):
+		_debug = int(cfg.get('DEBUG', 'verbose', 1))
 	return 0
 
-def telnet():
-	""" open connection to the bbs """
-	global bbs, chloe, debug, menu
+def plog(text):
+	""" debug log """
+	global debug
+	if (debug['log']):
+		log = open(debug['logfile'], 'a')
+		time = strftime('%a, %d %b %Y %H:%M:%S %Z', localtime())
+		log.write('%s chloe: %s\n' % (time, text))
+	time = strftime('%H:%M:%S', localtime())
+	print '%s chloe: %s' % (time, text)
+	if (debug['log']): log.close()
+	return 0
+
+def mlog(text):
+	""" debug mud log """
+	global debug
+	if (debug['log']):
+		log = open(debug['logfile'], 'a')
+		time = strftime('%a, %d %b %Y %H:%M:%S %Z', localtime())
+		log.write('%s: %s\n' % (time, text))
+	time = strftime('%H:%M:%S', localtime())
+	print '%s: %s' % (time, text)
+	if (debug['log']): log.close()
+	return 0
+
+def quit(signum, frame):
+	""" stop telnet/threaded timer and exit """
+	global chloe, _debug
+	if (_debug): plog('%d terminating...\n' % threading.active_count())
+	chloe.close()
+	exit(0)
+
+def _telnet():
+	""" telnet connectivity """
+	global bbs, chloe, menu, _debug
 	try:
 		chloe.open(bbs['host'])
-		start = time.time()
 		data = chloe.read_until('login:')
-		chloe.write(bbs['login'] + '\r\n')
+		chloe.write('%s\r\n' % bbs['user'])
 		data = chloe.read_until('password:')
-		chloe.write(bbs['pass'] + '\r\n')
+		chloe.write('%s\r\n' % bbs['passwd'])
 	except:
-		print 'telnet connection refused.\n - check config: bbs.cfg'
-		sys.exit(1)
+		plog('telnet connection refused.\n - check config: bbs.cfg\n')
+		exit(1)
 	""" enter majormud """
 	while 1:
 		data = chloe.read_very_eager()
 		if (menu['pause'] in data):
 			chloe.write('\r\n')
 		elif (menu['main'] in data):
-			chloe.write(menu['go'] + '\r\n')
+			chloe.write('%s\r\n' % menu['go'])
 		elif (menu['mud'] in data):
 			chloe.write('E\r\n')
 		elif ('[HP=' in data):
 			bbs['conn'] = 1
-			if (debug): print 'chloe: connection to %s established.' % (bbs['host'])
+			if (_debug): plog('character %s on %s connected.' % (bbs['user'], bbs['host']))
 			break
 	return 0
 
+def _sql(DATABASE_HOST, DATABASE_PORT, DATABASE_USER, DATABASE_PASSWD, DATABASE_NAME):
+	""" mysql database connectivity """
+	try:
+		db=MySQLdb.connect(host=DATABASE_HOST,user=DATABASE_USER,passwd=DATABASE_PASSWD, port=int(DATABASE_PORT))
+	except MySQLdb.OperationalError:
+		plog('error connecting to mysql database.\n - check config: bbs.cfg\n')
+		exit(1)
+
+	plog('database %s on %s connected.' % (DATABASE_NAME, DATABASE_HOST))
+	return db.cursor()
+
 def report():
 	""" timer control """
-	global bbs, chloe, debug, start
-	if not (bbs['conn']): sys.exit(0)
-	if (debug) and (start >= 1): print 'chloe: timer pass #%d' % (start)
+	global bbs, chloe, debug, start, _debug
+	if not (bbs['conn']): exit(0)
+	if (_debug) and (start >= 1): plog('report #%d' % start)
+	chloe.write('\r\n')
 	start = start + 1
 	t = threading.Timer(30.0, report)
 	t.start()
