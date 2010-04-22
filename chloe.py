@@ -33,7 +33,6 @@
 
 __version__ = '$Id$'
 
-
 import ConfigParser
 import MySQLdb
 import re
