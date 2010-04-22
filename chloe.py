@@ -31,7 +31,7 @@
 # representing official policies, either expressed or implied, of the 
 # Privatebox Networks.
 
-__version__ = '$Revision$'
+__version__ = '$Id$'
 
 
 import ConfigParser
