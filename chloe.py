@@ -305,7 +305,7 @@ def who_online(text):
 		tmp=_sql(sqlstr)
 		sqlstr='SELECT * FROM users WHERE user LIKE \''+name+'%\''
 		tmp=_sql(sqlstr)
-		if (int(tmp)>0):
+		if not (tmp == None):
 			sqlstr='UPDATE users SET title = \''+title+'\', gang = \''+gang+'\' WHERE user LIKE \''+name+'%\''
 			tmp=_sql(sqlstr)
 		else:
