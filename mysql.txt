@@ -1,5 +1,7 @@
 CREATE DATABASE wccmmud;
 
+USE wccmmud;
+
 CREATE TABLE gossip (
 	id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 	name CHAR(32) NOT NULL,
@@ -27,10 +29,10 @@ CREATE TABLE gangs (
 
 CREATE TABLE users (
 	id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-	user CHAR(32) NOT NULL,
+	user CHAR(48) NOT NULL,
     alignment CHAR(10),
 	class CHAR(10),
-	title CHAR(16),
+	title CHAR(32),
 	exp BIGINT(13) DEFAULT 0,
 	expold BIGINT(13) DEFAULT 0,
 	gang CHAR(32),
